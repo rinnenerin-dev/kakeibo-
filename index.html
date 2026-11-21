@@ -96,6 +96,12 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
 .alinks button{background:none;border:0;color:#fff;text-decoration:underline;min-height:44px;cursor:pointer;font-size:14px;padding:0}
 #aMsg{min-height:1.6em;font-size:14px;color:#ffc9ad;margin:10px 0 0}
 .logout{min-height:36px;padding:0 12px;border-radius:18px;border:1px solid #ffffff38;background:transparent;color:#fff;font-size:13px;cursor:pointer}
+.ed{cursor:pointer;border-radius:8px}.ed:hover .m{text-decoration:underline}
+.ed:focus-visible{outline:2px solid var(--kaki);outline-offset:2px}
+.item.editing{background:var(--soft);margin:0 -10px;padding-inline:10px;border-radius:10px}
+.cancel{width:100%;min-height:44px;margin-top:8px;border:1px solid var(--line);border-radius:12px;background:transparent;cursor:pointer;color:var(--mute)}
+.cancel[hidden]{display:none}
+.hint{font-size:13px;color:var(--mute);margin:-8px 0 10px}
 @media(max-width:600px){.two{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.track i,#toast{transition:none}}
 </style></head><body>
@@ -117,17 +123,17 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
   <p id="modeNote" class="note"></p>
 </div></header>
 <main class="wrap">
-  <section class="card"><h2>支出を記録</h2>
+  <section class="card" id="addCard"><h2 id="fTitle">支出を記録</h2>
     <form id="f" autocomplete="off">
       <label class="amt"><input id="amount" inputmode="numeric" placeholder="0" aria-label="金額"><b>円</b></label>
       <div class="chips" id="catChips"></div>
       <div class="row"><span class="lab">払い方</span><div class="seg" id="payerSeg"></div></div>
       <div class="two"><label><span class="lab">日付</span><input type="date" id="date"></label><label><span class="lab">メモ</span><input id="memo" placeholder="スーパー、ドラッグストア など"></label></div>
-      <button class="primary" type="submit">記録する</button>
+      <button class="primary" type="submit" id="fSubmit">記録する</button><button class="cancel" type="button" id="fCancel" hidden>編集をやめる</button>
     </form>
   </section>
   <section class="card"><h2>予算と実績</h2><div id="cats"></div></section>
-  <section class="card"><h2>明細</h2><div id="list"></div></section>
+  <section class="card"><h2>明細</h2><p class="hint">項目をタップすると編集できます。</p><div id="list"></div></section>
   <section class="card"><h2>毎月の固定費</h2><p class="sub">登録した月から毎月自動で計上します（家賃、サブスクなど）。</p>
     <div id="fixedList"></div>
     <form id="ff" class="ff">
@@ -135,7 +141,7 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
       <input id="fAmt" inputmode="numeric" placeholder="金額" aria-label="固定費の金額">
       <select id="fCat" aria-label="カテゴリ"></select>
       <select id="fPayer" aria-label="払い方"></select>
-      <button class="ghostBtn full" type="submit">固定費を追加</button>
+      <button class="ghostBtn full" type="submit" id="ffSubmit">固定費を追加</button><button class="cancel full" type="button" id="ffCancel" hidden>編集をやめる</button>
     </form>
   </section>
   <section class="card"><h2>設定</h2>
@@ -164,6 +170,7 @@ const DEF={names:{a:'あき',b:'りん'},ratioA:60,deposit:260000,allow:22000,
 let S=JSON.parse(JSON.stringify(DEF));
 let E=[],month=ym(new Date()),mode='loading',db=null,loaded=false,lastDel=null,tTimer=0;
 const form={cat:'食費',payer:'joint'};
+let editing=null,editingF=null;
 function ym(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function today(){const d=new Date();return ym(d)+'-'+String(d.getDate()).padStart(2,'0')}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -302,10 +309,10 @@ function render(){
   $('#list').innerHTML=(rows.length||fx.length)?[
     ...rows.map(i=>i.type==='settle'
       ?`<div class="item settleRow"><div><div class="m">立替を精算</div><div class="s">${md(i.date)}${i.a?` · ${esc(A)} ${yen(i.a)}`:''}${i.b?` · ${esc(B)} ${yen(i.b)}`:''}</div></div><div class="v num">${yen(i.amount)}</div><button class="x" data-del="${esc(i.id)}" aria-label="削除">×</button></div>`
-      :`<div class="item"><div><div class="m">${esc(i.memo||i.cat)}</div><div class="s">${md(i.date)} · ${esc(i.cat)} · ${esc(payLabel(i.payer))}</div></div><div class="v num">${yen(i.amount)}</div><button class="x" data-del="${esc(i.id)}" aria-label="削除">×</button></div>`),
+      :`<div class="item${editing===i.id?' editing':''}"><div class="ed" data-edit="${esc(i.id)}" role="button" tabindex="0"><div class="m">${esc(i.memo||i.cat)}</div><div class="s">${md(i.date)} · ${esc(i.cat)} · ${esc(payLabel(i.payer))}</div></div><div class="v num">${yen(i.amount)}</div><button class="x" data-del="${esc(i.id)}" aria-label="削除">×</button></div>`),
     ...fx.map(i=>`<div class="item"><div><div class="m"><span class="tag">毎月</span>${esc(i.name)}</div><div class="s">${esc(i.cat)} · ${esc(payLabel(i.payer))}</div></div><div class="v num">${yen(i.amount)}</div><span></span></div>`)
   ].join(''):'<p class="empty">この月の記録はまだありません。</p>';
-  $('#fixedList').innerHTML=(S.fixed||[]).length?S.fixed.map(f=>`<div class="item"><div><div class="m">${esc(f.name)}</div><div class="s">${esc(f.cat)} · ${esc(payLabel(f.payer))}${f.from?` · ${f.from.replace('-','年').replace(/年0?/,'年')}月から`:''}</div></div><div class="v num">${yen(f.amount)}</div><button class="x" data-fdel="${esc(f.id)}" aria-label="削除">×</button></div>`).join(''):'<p class="empty">まだ登録がありません。</p>';
+  $('#fixedList').innerHTML=(S.fixed||[]).length?S.fixed.map(f=>`<div class="item${editingF===f.id?' editing':''}"><div class="ed" data-fedit="${esc(f.id)}" role="button" tabindex="0"><div class="m">${esc(f.name)}</div><div class="s">${esc(f.cat)} · ${esc(payLabel(f.payer))}${f.from?` · ${f.from.replace('-','年').replace(/年0?/,'年')}月から`:''}</div></div><div class="v num">${yen(f.amount)}</div><button class="x" data-fdel="${esc(f.id)}" aria-label="削除">×</button></div>`).join(''):'<p class="empty">まだ登録がありません。</p>';
   const keep=(id,html)=>{const el=$(id),v=el.value;el.innerHTML=html;if(v)el.value=v};
   keep('#fCat',CATS().map(k=>`<option${k==='サブスク'?' selected':''}>${esc(k)}</option>`).join(''));
   keep('#fPayer',PAY.map(k=>`<option value="${k}">${esc(payLabel(k))}</option>`).join(''));
@@ -329,22 +336,50 @@ function toast(msg,undo){$('#tMsg').textContent=msg;$('#tBtn').hidden=!undo;$('#
 $('#date').value=today();
 document.addEventListener('click',e=>{
   const s=e.target.closest('[data-set]');if(s){form[s.dataset.set]=s.dataset.v;render();return}
-  const d=e.target.closest('[data-del]');if(d){lastDel=E.find(x=>x.id===d.dataset.del);delExpense(d.dataset.del);toast('削除しました',true);return}
+  const d=e.target.closest('[data-del]');if(d){if(editing===d.dataset.del)endEdit();lastDel=E.find(x=>x.id===d.dataset.del);delExpense(d.dataset.del);toast('削除しました',true);return}
+  const ed=e.target.closest('[data-edit]');if(ed){startEdit(ed.dataset.edit);return}
+  const fe=e.target.closest('[data-fedit]');if(fe){startEditF(fe.dataset.fedit);return}
   const fd=e.target.closest('[data-fdel]');if(fd){S={...S,fixed:S.fixed.filter(f=>f.id!==fd.dataset.fdel)};putSettings();toast('固定費を削除しました')}
 });
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList?.contains('ed')){e.preventDefault();e.target.click()}});
+function startEdit(id){
+  const i=E.find(x=>x.id===id);if(!i)return;
+  editing=id;form.cat=i.cat;form.payer=i.payer;
+  $('#amount').value=(+i.amount).toLocaleString('ja-JP');$('#date').value=i.date||today();$('#memo').value=i.memo||'';
+  $('#fTitle').textContent='支出を編集';$('#fSubmit').textContent='更新する';$('#fCancel').hidden=false;
+  render();$('#addCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function endEdit(){editing=null;$('#amount').value='';$('#memo').value='';$('#date').value=today();
+  $('#fTitle').textContent='支出を記録';$('#fSubmit').textContent='記録する';$('#fCancel').hidden=true;render()}
+$('#fCancel').onclick=endEdit;
+function startEditF(id){
+  const f=(S.fixed||[]).find(x=>x.id===id);if(!f)return;
+  editingF=id;$('#fName').value=f.name;$('#fAmt').value=(+f.amount).toLocaleString('ja-JP');
+  render();$('#fCat').value=f.cat;$('#fPayer').value=f.payer;
+  $('#ffSubmit').textContent='固定費を更新';$('#ffCancel').hidden=false;
+  $('#ff').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function endEditF(){editingF=null;$('#fName').value='';$('#fAmt').value='';$('#ffSubmit').textContent='固定費を追加';$('#ffCancel').hidden=true;render()}
+$('#ffCancel').onclick=endEditF;
 $('#tBtn').onclick=()=>{if(lastDel){putExpense(lastDel);lastDel=null}$('#toast').classList.remove('on')};
 $('#f').addEventListener('submit',e=>{
   e.preventDefault();const amount=toNum($('#amount').value);
   if(amount<=0){toast('金額を入れてください');$('#amount').focus();return}
   const date=$('#date').value||today();
-  const it={id:uid(),amount,cat:form.cat,payer:form.payer,date,month:date.slice(0,7),memo:$('#memo').value.trim(),t:Date.now()};
-  putExpense(it);$('#amount').value='';$('#memo').value='';
-  if(it.month!==month){month=it.month;render()}
-  toast(`${it.cat} ${yen(amount)} を記録しました`);
+  const prev=editing&&E.find(x=>x.id===editing);
+  const it={...(prev||{}),id:prev?prev.id:uid(),amount,cat:form.cat,payer:form.payer,date,month:date.slice(0,7),memo:$('#memo').value.trim(),t:prev?.t||Date.now()};
+  putExpense(it);
+  if(it.month!==month)month=it.month;
+  if(prev){endEdit();toast(`${it.cat} ${yen(amount)} に更新しました`)}
+  else{$('#amount').value='';$('#memo').value='';render();toast(`${it.cat} ${yen(amount)} を記録しました`)}
 });
 $('#ff').addEventListener('submit',e=>{
   e.preventDefault();const amount=toNum($('#fAmt').value),name=$('#fName').value.trim();
   if(!name||amount<=0){toast('名前と金額を入れてください');return}
+  if(editingF){
+    S={...S,fixed:S.fixed.map(f=>f.id===editingF?{...f,name,amount,cat:$('#fCat').value,payer:$('#fPayer').value}:f)};
+    putSettings();endEditF();toast(`${name}を更新しました`);return;
+  }
   S={...S,fixed:[...(S.fixed||[]),{id:uid(),name,amount,cat:$('#fCat').value,payer:$('#fPayer').value,from:month}]};
   putSettings();$('#fName').value='';$('#fAmt').value='';toast(`${name}を毎月の固定費に追加しました`);
 });
