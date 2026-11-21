@@ -104,6 +104,8 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
 .cancel{width:100%;min-height:44px;margin-top:8px;border:1px solid var(--line);border-radius:12px;background:transparent;cursor:pointer;color:var(--mute)}
 .cancel[hidden]{display:none}
 .hint{font-size:13px;color:var(--mute);margin:-8px 0 10px}
+.bk{display:flex;flex-wrap:wrap;gap:10px}
+.bkIn{display:inline-flex;align-items:center}
 @media(max-width:600px){.two{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.track i,#toast{transition:none}}
 </style></head><body>
@@ -156,6 +158,19 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
     <div class="budgets" id="budgets"></div>
     <p class="bsum tab" id="bsum"></p>
     <button class="ghostBtn" id="csv" type="button">この月の明細をCSVでコピー</button>
+  </section>
+  <section class="card"><h2>バックアップ</h2>
+    <p class="sub">データをファイルとして保存できます。月に一度くらい保存しておくと安心です。</p>
+    <div class="bk">
+      <button class="ghostBtn" id="bkJson" type="button">バックアップを保存（JSON）</button>
+      <button class="ghostBtn" id="bkCsv" type="button">全期間の明細を保存（CSV）</button>
+      <label class="ghostBtn bkIn">バックアップから復元<input type="file" id="bkFile" accept=".json,application/json" hidden></label>
+    </div>
+    <p class="hint" style="margin:12px 0 0">JSONは設定・固定費・すべての記録を含み、復元に使えます。CSVはExcelやGoogleスプレッドシートで開けます。復元は今のデータに上書き・追加する形で、消えるものはありません。</p>
+    <div id="bkConfirm" hidden style="margin-top:14px;padding:14px;border-radius:12px;background:var(--soft)">
+      <p id="bkMsg" style="margin:0 0 10px"></p>
+      <div class="bk"><button class="primary" id="bkGo" type="button" style="width:auto;padding:0 20px">復元する</button><button class="ghostBtn" id="bkNo" type="button">やめる</button></div>
+    </div>
   </section>
 </main>
 <div id="toast" role="status" aria-live="polite"><span id="tMsg"></span><button id="tBtn" hidden>元に戻す</button></div>
@@ -395,6 +410,45 @@ $('#allow').addEventListener('change',e=>{S={...S,allow:toNum(e.target.value)};e
 $('#budgets').addEventListener('change',e=>{const k=e.target.dataset.bud;if(k===undefined)return;S={...S,budgets:{...S.budgets,[k]:toNum(e.target.value)}};e.target.blur();putSettings()});
 const shift=n=>{const [y,m]=month.split('-').map(Number);month=ym(new Date(y,m-1+n,1));render()};
 $('#prev').onclick=()=>shift(-1);$('#next').onclick=()=>shift(1);
+/* ---- バックアップ ---- */
+const stamp=()=>{const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')};
+function download(name,text,type){
+  const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+$('#bkJson').onclick=()=>{
+  const data={app:'futari-kakeibo',version:1,exportedAt:new Date().toISOString(),settings:S,expenses:E};
+  download(`kakeibo-backup-${stamp()}.json`,JSON.stringify(data,null,2),'application/json');
+  toast(`${E.length}件の記録を保存しました`);
+};
+$('#bkCsv').onclick=()=>{
+  const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const rows=[...E].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.t||0)-(b.t||0));
+  const lines=[['日付','月','種類','カテゴリ','メモ','金額','払い方'].join(','),
+    ...rows.map(i=>[i.date,i.month,i.type==='settle'?'精算':'支出',i.cat||'',i.type==='settle'?`立替を精算（${nm('a')} ${i.a||0} / ${nm('b')} ${i.b||0}）`:(i.memo||''),i.amount,i.type==='settle'?'':payLabel(i.payer)].map(q).join(','))];
+  download(`kakeibo-${stamp()}.csv`,'\ufeff'+lines.join('\r\n'),'text/csv');
+  toast('CSVを保存しました（固定費は含みません）');
+};
+let pending=null;
+$('#bkFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(d.app!=='futari-kakeibo'||!Array.isArray(d.expenses))throw 0;
+    pending=d;
+    $('#bkMsg').textContent=`${(d.exportedAt||'').slice(0,10)} のバックアップ（記録 ${d.expenses.length}件）を復元します。同じ記録は上書きされ、今のデータは消えません。`;
+    $('#bkConfirm').hidden=false;
+  }catch(x){toast('このファイルは家計簿のバックアップではないようです')}
+});
+$('#bkNo').onclick=()=>{pending=null;$('#bkConfirm').hidden=true};
+$('#bkGo').onclick=async()=>{
+  if(!pending)return;const d=pending;pending=null;$('#bkConfirm').hidden=true;
+  try{
+    if(d.settings&&d.settings.budgets){S={...S,...d.settings};await setDoc(doc(fs,P+'/settings/main'),S)}
+    let n=0;for(const e of d.expenses){if(!e.id)continue;await setDoc(doc(fs,P+'/expenses/'+e.id),e);n++}
+    render();toast(`${n}件の記録を復元しました`);
+  }catch(x){toast('復元の途中で失敗しました。もう一度お試しください')}
+};
 $('#csv').onclick=async()=>{
   const {ex,fx}=items(month),q=v=>`"${String(v??'').replace(/"/g,'""')}"`;
   const lines=[['日付','種類','カテゴリ','メモ','金額','払い方'].join(','),
