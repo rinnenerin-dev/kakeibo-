@@ -177,7 +177,14 @@ const PAY=['joint','a','b'];
 
 /* ---- 保存先：Firebase ---- */
 // Firebaseの「ウェブアプリの設定」をここに貼る
-const FIREBASE_CONFIG={};
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyDhqFdnES_RnWUA1Wllx64SksYb_HC6RHI",
+  authDomain:"kakeibo-2c451.firebaseapp.com",
+  projectId:"kakeibo-2c451",
+  storageBucket:"kakeibo-2c451.firebasestorage.app",
+  messagingSenderId:"981142419939",
+  appId:"1:981142419939:web:35b8d2a33616a0f5e788d6"
+};
 const P='households/home';
 const ready=!!FIREBASE_CONFIG.apiKey;
 const fbApp=ready?initializeApp(FIREBASE_CONFIG):null,auth=ready?getAuth(fbApp):null,fs=ready?getFirestore(fbApp):null;
