@@ -16,6 +16,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Zen Kaku Goth
 .wrap{max-width:760px;margin:0 auto;padding:0 max(4vw,16px)}
 button,input,select{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.tab{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+html{overflow-x:clip}
 .top{background:var(--ai);color:#f2f4fb;padding:20px 0 30px;border-bottom:6px solid var(--kaki)}
 .bar1{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.04em;opacity:.9}
@@ -81,8 +83,8 @@ input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid 
 input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
 .budgets{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px;margin:6px 0 8px}
 .bsum{font-size:14px;color:var(--mute);margin:0 0 16px}
-#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,140%);background:#141927;color:#fff;padding:10px 12px 10px 18px;border-radius:14px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px #0005;transition:transform .25s;max-width:calc(100vw - 32px);z-index:5}
-#toast.on{transform:translate(-50%,0)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,calc(100% + 40px));visibility:hidden;background:#141927;color:#fff;padding:10px 12px 10px 18px;border-radius:14px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px #0005;transition:transform .25s;max-width:calc(100vw - 32px);z-index:5}
+#toast.on{transform:translate(-50%,0);visibility:visible}
 #toast button{min-height:36px;border:0;border-radius:9px;background:var(--kaki);color:#fff;padding:0 12px;font-weight:700;cursor:pointer}
 #auth{position:fixed;inset:0;background:var(--ai);color:#f2f4fb;display:flex;align-items:center;justify-content:center;padding:24px 16px;z-index:10;overflow:auto}
 #auth[hidden]{display:none}
@@ -152,7 +154,7 @@ input[type=range]{width:100%;accent-color:var(--kaki);height:44px}
     <div class="grid2" style="margin-top:10px"><label><span class="lab">共通口座への毎月の入金（合計）</span><input class="field num" id="dep" inputmode="numeric"></label><label><span class="lab" id="allowLab">家賃補助（ふたり目が入れる）</span><input class="field num" id="allow" inputmode="numeric"></label></div>
     <span class="lab">カテゴリごとの月の予算</span>
     <div class="budgets" id="budgets"></div>
-    <p class="bsum num" id="bsum"></p>
+    <p class="bsum tab" id="bsum"></p>
     <button class="ghostBtn" id="csv" type="button">この月の明細をCSVでコピー</button>
   </section>
 </main>
@@ -287,14 +289,14 @@ function render(){
     const oweAny=c.owe.a+c.owe.b>=1;
     $('#summary').innerHTML=`<p class="k">${c.rest>=0?'今月あと使えるお金':'予算オーバー'}</p>
       <p class="big${c.rest<0?' over':''}">${yen(Math.abs(c.rest))}</p>
-      <p class="of num">支出 ${yen(c.total)} ／ 入金 ${yen(c.dep)}</p>
+      <p class="of tab">支出 ${yen(c.total)} ／ 入金 ${yen(c.dep)}</p>
       <div class="track"><i class="${c.rest<0?'tb':'ta'}" style="width:${p}%"></i></div>
       <div class="panel"><h3>月末の精算</h3>
         ${oweAny?['a','b'].filter(k=>c.owe[k]>=1).map(k=>`<div class="prow"><span>共通口座 → ${esc(nm(k))}（立替分）</span><b class="num">${yen(c.owe[k])}</b></div>`).join('')
           :`<div class="prow"><span>${c.settled?'立替分は精算済みです':'立替はまだありません'}</span></div>`}
         ${c.short>0?`<div class="prow"><span>不足分の追加入金 ${esc(A)}</span><b class="num">${yen(c.addA)}</b></div><div class="prow"><span>不足分の追加入金 ${esc(B)}</span><b class="num">${yen(c.addB)}</b></div>`:''}
         ${oweAny?`<button class="settle" id="settleBtn">精算した</button>`:''}
-        <p class="psub num">毎月の入金：${esc(A)} ${yen(c.depA)} ／ ${esc(B)} ${yen(c.depB)}${c.allow?`<br>${esc(B)}の家賃補助 ${yen(c.allow)} を入れて、残り ${yen(c.dep-c.allow)} を ${rA}:${rB}`:`（${rA}:${rB}）`}${c.rest>0?`<br>余った ${yen(c.rest)} は共通口座に残ります`:''}</p>
+        <p class="psub tab">毎月の入金：${esc(A)} ${yen(c.depA)} ／ ${esc(B)} ${yen(c.depB)}${c.allow?`<br>${esc(B)}の家賃補助 ${yen(c.allow)} を入れて、残り ${yen(c.dep-c.allow)} を ${rA}:${rB}`:`（${rA}:${rB}）`}${c.rest>0?`<br>余った ${yen(c.rest)} は共通口座に残ります`:''}</p>
       </div>`;
     $('#settleBtn')?.addEventListener('click',()=>{putExpense({id:uid(),type:'settle',a:Math.round(c.owe.a),b:Math.round(c.owe.b),amount:Math.round(c.owe.a+c.owe.b),date:today(),month,t:Date.now()});toast('精算を記録しました')});
   } else $('#summary').innerHTML='<p class="k">読み込み中…</p>';
